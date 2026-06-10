@@ -23,6 +23,12 @@ project API key.
 
 ## Client Envelopes
 
+DataNet supports two transport payload classes:
+
+- JSON values in `d`, including strings, numbers, booleans, arrays, objects,
+  and nested data structures.
+- Binary bytes in `b64`, labeled by `ct` and optionally described with `meta`.
+
 Subscribe:
 
 ```json
@@ -130,6 +136,10 @@ Known binary content types include:
 - `binary/ble-adv-batch`
 - `binary/interaction-batch`
 - `application/octet-stream`
+
+The `ct` value identifies the packet format, not the channel itself. A project
+may use standard DataNet content types or application-specific strings when a
+bridge, SDK, or receiver understands that format.
 
 ## Server Responses
 

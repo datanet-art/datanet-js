@@ -4,6 +4,10 @@ DataNet JavaScript SDK — realtime pub/sub for browsers and Node.js. Handles
 authentication, channel subscribe/publish, heartbeating, token refresh, and
 reconnection against the [DataNet](https://datanet.art) platform.
 
+Payloads can be JSON values and nested data structures, typed arrays / raw
+bytes, or content-type-labeled binary formats such as DMX, Art-Net, float
+vectors, BLE batches, and compact interaction frames.
+
 For custom clients or other SDK implementations, see the repository-level
 [`PROTOCOL.md`](../../PROTOCOL.md).
 
@@ -49,6 +53,9 @@ client.publish("project.<pid>.sensors", { temperature: 21.4 });
 DataNet can also carry raw bytes for lighting control, compact sensor frames,
 and bridge workflows. Binary publishes use the gateway's binary envelope under
 the hood, so browser and Node users do not need to manually base64-encode data.
+Use `contentType` to identify the format carried by the packet and `metadata`
+for routing context such as lighting universe, fixture group, stream format, or
+application-specific schema.
 
 ```js
 import { DataNet, buildDmxFrame } from "@datanet/core";
@@ -84,6 +91,14 @@ Available binary helpers:
 | `publishArtNet(channel, dmx, options)` | Build an ArtDMX packet from DMX values and publish as `binary/artnet` |
 | `buildDmxFrame(values, length)` | Create a 1-512 byte DMX frame |
 | `buildArtDmxPacket(dmx, options)` | Build an Art-Net ArtDMX UDP payload |
+
+Supported payload patterns:
+
+- JSON scalars, arrays, and objects through `publish(channel, value)`.
+- Typed arrays / `ArrayBuffer` values, auto-detected by `publish(...)`.
+- Explicit binary packets through `publishBinary(...)`.
+- Mixed JSON and binary channels through `subscribeAny(...)`.
+- Application-defined schemas carried in JSON payloads or binary `metadata`.
 
 Binary messages are delivered with protocol metadata instead of anonymous raw
 frames, so subscribers can route and decode packets without hard-coding that

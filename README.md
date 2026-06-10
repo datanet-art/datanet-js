@@ -4,6 +4,10 @@ DataNet JavaScript SDK family — realtime pub/sub for browsers, Node.js, and
 p5.js sketches. [DataNet](https://datanet.art) is an artist-friendly realtime
 data network for installations, artworks, and connected devices.
 
+DataNet supports multiple payload shapes: JSON values and nested structures,
+typed arrays / raw bytes, and metadata-labeled binary formats such as DMX,
+Art-Net, float vectors, BLE batches, and compact interaction frames.
+
 | Package | Install | For |
 |---|---|---|
 | [`@datanet/core`](packages/core) | `npm install @datanet/core` | Browsers and Node.js — the foundation |
