@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DataNet,
   DataNetError,
@@ -7,6 +7,11 @@ import {
   buildArtDmxPacket,
   buildDmxFrame,
 } from "../src/index.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("DataNetError", () => {
   it("carries structured gateway error details", () => {
@@ -69,6 +74,94 @@ describe("DataNet", () => {
     const client = new DataNet({ apiKey: "ak_test" });
     expect(() => client.disconnect()).not.toThrow();
     expect(client.connected).toBe(false);
+  });
+
+  it("sends heartbeat envelopes every 30 seconds", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("WebSocket", { OPEN: 1 });
+    const client = new DataNet({ apiKey: "ak_test" });
+    const send = vi.fn();
+    (client as unknown as { ws: { readyState: number; send: (payload: string) => void } }).ws = {
+      readyState: 1,
+      send,
+    };
+
+    (client as unknown as { startHeartbeat(): void }).startHeartbeat();
+    vi.advanceTimersByTime(30_000);
+
+    expect(send).toHaveBeenCalledWith(JSON.stringify({ op: "hb" }));
+    (client as unknown as { stopHeartbeat(): void }).stopHeartbeat();
+  });
+
+  it("schedules reconnect with exponential backoff and reuses a valid JWT", async () => {
+    vi.useFakeTimers();
+    const client = new DataNet({ apiKey: "ak_test" });
+    const openSocket = vi.fn(async () => {});
+    Object.assign(client as unknown as Record<string, unknown>, {
+      jwt: "header.payload.signature",
+      jwtExpiry: Math.floor(Date.now() / 1000) + 120,
+      openSocket,
+    });
+
+    (client as unknown as { scheduleReconnect(): void }).scheduleReconnect();
+    expect(openSocket).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(openSocket).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(openSocket).toHaveBeenCalledOnce();
+  });
+
+  it("replays JSON, binary, and mixed subscriptions after socket connect", async () => {
+    type Listener = (event: { data?: unknown }) => void;
+    class FakeWebSocket {
+      static OPEN = 1;
+      static instances: FakeWebSocket[] = [];
+      readyState = 1;
+      sent: string[] = [];
+      listeners = new Map<string, Listener[]>();
+
+      constructor() {
+        FakeWebSocket.instances.push(this);
+      }
+
+      addEventListener(event: string, listener: Listener) {
+        this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener]);
+      }
+
+      send(payload: string) {
+        this.sent.push(payload);
+      }
+
+      close() {
+        this.emit("close", {});
+      }
+
+      emit(event: string, payload: { data?: unknown }) {
+        for (const listener of this.listeners.get(event) ?? []) listener(payload);
+      }
+    }
+
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const client = new DataNet({ apiKey: "ak_test" });
+    client.subscribe("demo.json", vi.fn());
+    client.subscribeBinary("demo.binary", vi.fn());
+    client.subscribeAny("demo.any", vi.fn());
+    Object.assign(client as unknown as Record<string, unknown>, { jwt: "token" });
+
+    const opened = (client as unknown as { openSocket(): Promise<void> }).openSocket();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.emit("open", {});
+    ws.emit("message", { data: JSON.stringify({ type: "connected" }) });
+    await opened;
+
+    expect(ws.sent.map((payload) => JSON.parse(payload))).toEqual([
+      { op: "sub", ch: "demo.json" },
+      { op: "sub", ch: "demo.binary" },
+      { op: "sub", ch: "demo.any" },
+    ]);
+    client.disconnect();
   });
 
   it("decodes Node Buffer WebSocket message payloads", () => {
