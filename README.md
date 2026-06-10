@@ -22,6 +22,7 @@ data network for installations, artworks, and connected devices.
 
 Get an API key at [app.datanet.art](https://app.datanet.art). Full docs at
 [datanet.art/docs](https://datanet.art/docs).
+The wire protocol is documented in [PROTOCOL.md](PROTOCOL.md).
 
 ## Quick start (Node.js)
 
@@ -33,6 +34,29 @@ client.on("connect", () => console.log("connected"));
 client.subscribe("project.<pid>.demo", (data) => console.log(data));
 await client.connect();
 ```
+
+## Binary lighting quick start
+
+```js
+import { DataNet, buildDmxFrame } from "@datanet/core";
+
+const client = new DataNet({ apiKey: process.env.DATANET_API_KEY });
+await client.connect();
+
+const frame = buildDmxFrame([255, 80, 20, 180], 512);
+client.publishBinary("project.<pid>.lighting.dmx", frame, {
+  contentType: "binary/dmx",
+  metadata: { universe: 1, format: "dmx512" },
+});
+
+client.subscribeBinary("project.<pid>.lighting.dmx", (bytes, meta) => {
+  console.log(meta.contentType, meta.metadata?.universe, bytes.length);
+});
+```
+
+Binary messages carry protocol metadata with the packet: `channel`, `from`,
+`timestamp`, `contentType`, `bytes`, and optional custom `metadata`. Use
+`subscribeAny()` when a channel may carry both JSON and binary signals.
 
 Node 22+ works out of the box. On Node 20/21, provide a WebSocket global
 first: `import { WebSocket } from "ws"; globalThis.WebSocket = WebSocket;`

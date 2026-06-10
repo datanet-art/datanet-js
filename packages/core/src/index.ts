@@ -33,6 +33,52 @@ export interface MessageMeta {
 }
 
 export type MessageHandler = (data: unknown, meta: MessageMeta) => void;
+export type BinaryData = ArrayBuffer | ArrayBufferView;
+export type BinaryContentType =
+  | "binary/dmx"
+  | "binary/artnet"
+  | "application/octet-stream"
+  | (string & {});
+
+export interface BinaryMessageMeta {
+  channel: string;
+  from: string;
+  timestamp: number;
+  contentType: string;
+  bytes: number;
+  metadata?: Record<string, unknown>;
+}
+
+export type BinaryMessageHandler = (data: Uint8Array, meta: BinaryMessageMeta) => void;
+
+export type AnyMessage =
+  | { kind: "json"; data: unknown; meta: MessageMeta }
+  | { kind: "binary"; data: Uint8Array; meta: BinaryMessageMeta };
+
+export type AnyMessageHandler = (message: AnyMessage) => void;
+
+export interface PublishOptions {
+  contentType?: BinaryContentType;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PublishBinaryOptions {
+  contentType?: BinaryContentType;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SubscribeBinaryOptions {
+  contentType?: BinaryContentType;
+}
+
+export interface ArtDmxOptions {
+  universe?: number;
+  subnet?: number;
+  net?: number;
+  sequence?: number;
+  physical?: number;
+}
+
 type EventHandler = (...args: unknown[]) => void;
 
 export interface DataNetErrorDetails {
@@ -68,6 +114,114 @@ interface Envelope {
   d?: unknown;
   from?: string;
   ts?: number;
+  bin?: boolean;
+  b64?: string;
+  ct?: string;
+  bytes?: number;
+  meta?: Record<string, unknown>;
+}
+
+interface DecodedMessageData {
+  text: string;
+  bytes?: Uint8Array;
+}
+
+function clampByte(value: number, fallback = 0): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.min(255, Math.trunc(value)));
+}
+
+function clampRange(value: number, min: number, max: number, fallback = min): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+export function toUint8Array(data: BinaryData): Uint8Array {
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
+function isBinaryData(data: unknown): data is BinaryData {
+  return data instanceof ArrayBuffer || ArrayBuffer.isView(data);
+}
+
+export function binaryToBase64(data: BinaryData): string {
+  const bytes = toUint8Array(data);
+  const maybeBuffer = (globalThis as unknown as {
+    Buffer?: { from(input: Uint8Array): { toString(encoding: "base64"): string } };
+  }).Buffer;
+
+  if (maybeBuffer) {
+    return maybeBuffer.from(bytes).toString("base64");
+  }
+
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+export function base64ToBinary(encoded: string): Uint8Array {
+  const maybeBuffer = (globalThis as unknown as {
+    Buffer?: { from(input: string, encoding: "base64"): Uint8Array };
+  }).Buffer;
+
+  if (maybeBuffer) {
+    return new Uint8Array(maybeBuffer.from(encoded, "base64"));
+  }
+
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function buildDmxFrame(values: ArrayLike<number>, length = 512): Uint8Array {
+  const frameLength = clampRange(length, 1, 512, 512);
+  const frame = new Uint8Array(frameLength);
+  const count = Math.min(values.length, frameLength);
+  for (let i = 0; i < count; i += 1) {
+    frame[i] = clampByte(Number(values[i]));
+  }
+  return frame;
+}
+
+export function buildArtDmxPacket(dmx: BinaryData | ArrayLike<number>, options: ArtDmxOptions = {}): Uint8Array {
+  const dmxBytes = ArrayBuffer.isView(dmx) || dmx instanceof ArrayBuffer
+    ? toUint8Array(dmx)
+    : buildDmxFrame(dmx, Math.min(Math.max(dmx.length, 2), 512));
+  const frameLength = clampRange(Math.max(dmxBytes.length, 2), 2, 512, 2);
+  const packet = new Uint8Array(18 + frameLength);
+  const header = "Art-Net";
+  for (let i = 0; i < header.length; i += 1) packet[i] = header.charCodeAt(i);
+  packet[7] = 0x00;
+  packet[8] = 0x00;
+  packet[9] = 0x50;
+  packet[10] = 0x00;
+  packet[11] = 14;
+  packet[12] = clampByte(options.sequence ?? 0);
+  packet[13] = clampByte(options.physical ?? 0);
+
+  const universe = clampRange(options.universe ?? 0, 0, 15, 0);
+  const subnet = clampRange(options.subnet ?? 0, 0, 15, 0);
+  const net = clampRange(options.net ?? 0, 0, 127, 0);
+  const portAddress = (subnet << 4) | universe;
+  packet[14] = portAddress & 0xff;
+  packet[15] = net & 0x7f;
+  packet[16] = (frameLength >> 8) & 0xff;
+  packet[17] = frameLength & 0xff;
+  packet.set(dmxBytes.subarray(0, frameLength), 18);
+  return packet;
 }
 
 export class DataNet {
@@ -83,6 +237,9 @@ export class DataNet {
   private jwtExpiry: number | null = null; // unix seconds from JWT exp claim
   private ws: WebSocket | null = null;
   private handlers = new Map<string, Set<MessageHandler>>();
+  private binaryHandlers = new Map<string, Set<BinaryMessageHandler>>();
+  private anyHandlers = new Map<string, Set<AnyMessageHandler>>();
+  private binaryContentTypes = new Map<string, string>();
   private listeners = new Map<string, Set<EventHandler>>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -196,37 +353,47 @@ export class DataNet {
       });
 
       ws.addEventListener("message", (event) => {
-        const data = event.data as string | ArrayBuffer | Blob;
-        const finish = (text: string) => {
+        const data = event.data as unknown;
+        const finish = (text: string): boolean => {
           if (!handshakeComplete) {
             try {
               const msg = JSON.parse(text) as Record<string, unknown>;
               if (msg.type === "connected") {
                 handshakeComplete = true;
                 this.handlers.forEach((_, ch) => this.send({ op: "sub", ch }));
+                this.binaryHandlers.forEach((_, ch) => this.send({ op: "sub", ch }));
+                this.anyHandlers.forEach((_, ch) => this.send({ op: "sub", ch }));
                 this.emit("connect");
                 resolve();
-                return;
+                return true;
               }
               if (msg.type === "error" && msg.error) {
                 const err = this.toGatewayError(msg);
                 this.emit("error", err);
                 reject(err);
-                return;
+                return true;
               }
             } catch {
               // Ignore parse errors here and let the normal handler deal with them.
             }
           }
-          this.handleMessage(text);
+          return this.handleMessage(text);
         };
 
-        if (typeof data === "string") {
-          finish(data);
-        } else if (data instanceof ArrayBuffer) {
-          finish(new TextDecoder().decode(data));
-        } else if (data instanceof Blob) {
-          void data.text().then((text) => finish(text));
+        const decoded = this.decodeMessageData(data);
+        const receive = ({ text, bytes }: { text: string; bytes?: Uint8Array }) => {
+          const handled = finish(text);
+          if (!handled && bytes) {
+            this.handleBinaryMessage(bytes);
+          }
+        };
+
+        if (decoded) {
+          if (this.isPromise(decoded)) {
+            void decoded.then(receive);
+          } else {
+            receive(decoded);
+          }
         }
       });
 
@@ -251,31 +418,109 @@ export class DataNet {
     });
   }
 
-  private handleMessage(raw: string): void {
+  private isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+    return typeof (value as Promise<T>).then === "function";
+  }
+
+  private decodeMessageData(data: unknown): DecodedMessageData | Promise<DecodedMessageData> | null {
+    if (typeof data === "string") {
+      return { text: data };
+    }
+    if (data instanceof ArrayBuffer) {
+      const bytes = new Uint8Array(data);
+      return { text: new TextDecoder().decode(bytes), bytes };
+    }
+    if (ArrayBuffer.isView(data)) {
+      const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      return { text: new TextDecoder().decode(bytes), bytes };
+    }
+    if (typeof Blob !== "undefined" && data instanceof Blob) {
+      return data.arrayBuffer().then((buffer) => {
+        const bytes = new Uint8Array(buffer);
+        return { text: new TextDecoder().decode(bytes), bytes };
+      });
+    }
+    return null;
+  }
+
+  private handleMessage(raw: string): boolean {
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(raw) as Record<string, unknown>;
     } catch {
-      return;
+      return false;
     }
 
     // Pub/sub message
     if (msg.op === "pub" && msg.ch) {
+      if (msg.bin === true && typeof msg.b64 === "string") {
+        this.handleBinaryEnvelope(msg as unknown as Envelope);
+        return true;
+      }
+
       const set = this.handlers.get(msg.ch as string);
+      const meta: MessageMeta = {
+        channel: msg.ch as string,
+        from: (msg.from as string) ?? "",
+        timestamp: (msg.ts as number) ?? Date.now(),
+      };
       if (set) {
-        const meta: MessageMeta = {
-          channel: msg.ch as string,
-          from: (msg.from as string) ?? "",
-          timestamp: (msg.ts as number) ?? Date.now(),
-        };
         set.forEach((h) => h(msg.d, meta));
       }
+      this.anyHandlers.get(msg.ch as string)?.forEach((handler) => {
+        handler({ kind: "json", data: msg.d, meta });
+      });
     }
 
     // Gateway-level errors (e.g. channel_not_allowed)
     if (msg.type === "error" && msg.error) {
       this.emit("error", this.toGatewayError(msg));
     }
+    return true;
+  }
+
+  private handleBinaryMessage(bytes: Uint8Array): void {
+    const channels = new Set([...this.binaryHandlers.keys(), ...this.anyHandlers.keys()]);
+    if (channels.size === 0) return;
+    if (channels.size > 1) {
+      this.emit(
+        "error",
+        new Error("DataNet: binary frame received, but multiple binary channels are subscribed; use one binary channel per connection until binary metadata is available.")
+      );
+      return;
+    }
+
+    const [channel] = channels;
+    const meta: BinaryMessageMeta = {
+      channel,
+      from: "",
+      timestamp: Date.now(),
+      contentType: this.binaryContentTypes.get(channel) ?? "application/octet-stream",
+      bytes: bytes.byteLength,
+    };
+    this.binaryHandlers.get(channel)?.forEach((handler) => handler(bytes, meta));
+    this.anyHandlers.get(channel)?.forEach((handler) => {
+      handler({ kind: "binary", data: bytes, meta });
+    });
+  }
+
+  private handleBinaryEnvelope(msg: Envelope): void {
+    if (!msg.ch || !msg.b64) return;
+    const channel = msg.ch;
+    const bytes = base64ToBinary(msg.b64);
+    const meta: BinaryMessageMeta = {
+      channel,
+      from: msg.from ?? "",
+      timestamp: msg.ts ?? Date.now(),
+      contentType: msg.ct ?? this.binaryContentTypes.get(channel) ?? "application/octet-stream",
+      bytes: typeof msg.bytes === "number" ? msg.bytes : bytes.byteLength,
+      metadata: msg.meta,
+    };
+
+    this.binaryHandlers.get(channel)?.forEach((handler) => handler(bytes, meta));
+    this.anyHandlers.get(channel)?.forEach((handler) => {
+      handler({ kind: "binary", data: bytes, meta });
+    });
   }
 
   private toGatewayError(msg: Record<string, unknown>): DataNetError {
@@ -448,10 +693,112 @@ export class DataNet {
    * @param channel  Channel name
    * @param data     Any JSON-serialisable value
    */
-  publish(channel: string, data: unknown): this {
+  publish(channel: string, data: unknown, options: PublishOptions = {}): this {
+    if (isBinaryData(data)) {
+      return this.publishBinary(channel, data, {
+        contentType: options.contentType,
+        metadata: options.metadata,
+      });
+    }
     this.send({ op: "pub", ch: channel, d: data });
     return this;
   }
+
+  /**
+   * Publish raw bytes to a binary channel. Browsers, Node bridges, and hardware
+   * receivers can use this for DMX, Art-Net, sensor frames, and other compact
+   * binary payloads.
+   */
+  publishBinary(channel: string, data: BinaryData, options: PublishBinaryOptions = {}): this {
+    this.send({
+      op: "pub",
+      ch: channel,
+      bin: true,
+      b64: binaryToBase64(data),
+      ct: options.contentType ?? "application/octet-stream",
+      meta: options.metadata,
+    });
+    return this;
+  }
+
+  subscribeBinary(channel: string, handler: BinaryMessageHandler, options: SubscribeBinaryOptions = {}): this {
+    let set = this.binaryHandlers.get(channel);
+    if (!set) {
+      set = new Set();
+      this.binaryHandlers.set(channel, set);
+      if (options.contentType) this.binaryContentTypes.set(channel, options.contentType);
+      this.send({ op: "sub", ch: channel });
+    }
+    set.add(handler);
+    return this;
+  }
+
+  unsubscribeBinary(channel: string, handler?: BinaryMessageHandler): this {
+    if (!handler) {
+      this.binaryHandlers.delete(channel);
+      this.binaryContentTypes.delete(channel);
+      this.send({ op: "unsub", ch: channel });
+      return this;
+    }
+
+    const set = this.binaryHandlers.get(channel);
+    if (set) {
+      set.delete(handler);
+      if (set.size === 0) {
+        this.binaryHandlers.delete(channel);
+        this.binaryContentTypes.delete(channel);
+        this.send({ op: "unsub", ch: channel });
+      }
+    }
+    return this;
+  }
+
+  subscribeAny(channel: string, handler: AnyMessageHandler): this {
+    let set = this.anyHandlers.get(channel);
+    if (!set) {
+      set = new Set();
+      this.anyHandlers.set(channel, set);
+      this.send({ op: "sub", ch: channel });
+    }
+    set.add(handler);
+    return this;
+  }
+
+  unsubscribeAny(channel: string, handler?: AnyMessageHandler): this {
+    if (!handler) {
+      this.anyHandlers.delete(channel);
+      this.send({ op: "unsub", ch: channel });
+      return this;
+    }
+
+    const set = this.anyHandlers.get(channel);
+    if (set) {
+      set.delete(handler);
+      if (set.size === 0) {
+        this.anyHandlers.delete(channel);
+        this.send({ op: "unsub", ch: channel });
+      }
+    }
+    return this;
+  }
+
+  publishDmx(channel: string, values: ArrayLike<number>, options: { length?: number } = {}): this {
+    return this.publishBinary(channel, buildDmxFrame(values, options.length ?? 512), {
+      contentType: "binary/dmx",
+    });
+  }
+
+  publishArtNet(channel: string, dmx: BinaryData | ArrayLike<number>, options: ArtDmxOptions = {}): this {
+    return this.publishBinary(channel, buildArtDmxPacket(dmx, options), {
+      contentType: "binary/artnet",
+    });
+  }
+
+  static toUint8Array = toUint8Array;
+  static binaryToBase64 = binaryToBase64;
+  static base64ToBinary = base64ToBinary;
+  static buildDmxFrame = buildDmxFrame;
+  static buildArtDmxPacket = buildArtDmxPacket;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 

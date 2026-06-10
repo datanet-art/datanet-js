@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataNet - browser DMX example</title>
+  <style>
+    body { font-family: ui-monospace, monospace; background: #101015; color: #e8e8ea; padding: 24px; }
+    label { display: block; margin: 12px 0 4px; }
+    input { width: min(420px, 100%); padding: 8px; font: inherit; }
+    button { margin-top: 16px; padding: 8px 14px; font: inherit; cursor: pointer; }
+    #log { margin-top: 16px; white-space: pre-wrap; color: #9f9; }
+  </style>
+</head>
+<body>
+  <h1>DataNet browser DMX publisher</h1>
+
+  <label>API key</label>
+  <input id="api-key" value="ak_your_api_key_here" />
+
+  <label>Binary channel</label>
+  <input id="channel" value="project.your_project_id.lighting.dmx" />
+
+  <button id="send">Send DMX frame</button>
+  <div id="log"></div>
+
+  <script src="../../dist/datanet.browser.js"></script>
+  <script>
+    const log = (line) => {
+      document.getElementById("log").textContent = `${line}\n${document.getElementById("log").textContent}`;
+    };
+
+    document.getElementById("send").addEventListener("click", async () => {
+      const apiKey = document.getElementById("api-key").value.trim();
+      const channel = document.getElementById("channel").value.trim();
+      const client = new DataNet({ apiKey, deviceId: "browser-dmx-example" });
+
+      client.on("error", (error) => log(`error: ${error.message || error}`));
+      await client.connect();
+
+      const frame = DataNet.buildDmxFrame([
+        255, // dimmer
+        80,  // red
+        20,  // green
+        180, // blue
+      ], 512);
+
+      client.publishBinary(channel, frame, {
+        contentType: "binary/dmx",
+        metadata: { universe: 1, format: "dmx512" },
+      });
+      log(`sent ${frame.byteLength} DMX bytes to ${channel}`);
+      setTimeout(() => client.disconnect(), 500);
+    });
+  </script>
+</body>
+</html>

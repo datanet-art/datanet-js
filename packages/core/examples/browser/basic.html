@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataNet - browser example</title>
+  <style>
+    body { font-family: ui-monospace, monospace; background: #0d0d1a; color: #ccc; padding: 24px; }
+    h1 { font-size: 1rem; color: #e0e0ff; }
+    #status { margin: 12px 0; }
+    #log { white-space: pre-wrap; font-size: 0.85rem; color: #9f9; }
+    input { width: min(520px, 100%); padding: 6px 8px; margin: 4px 0 10px; font: inherit; }
+    label { display: block; }
+    button { font: inherit; padding: 6px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>DataNet browser example</h1>
+
+  <label>API key</label>
+  <input id="api-key" value="ak_your_api_key_here" />
+
+  <label>Channel</label>
+  <input id="channel" value="project.your_project_id.demo" />
+
+  <p id="status">idle</p>
+  <button id="connect">Connect</button>
+  <button id="send">Publish a test message</button>
+  <div id="log"></div>
+
+  <!--
+    From a clone of this repo, build first:
+    pnpm --filter @datanet/core build
+
+    In your own project, use the CDN instead:
+    <script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+  -->
+  <script src="../../dist/datanet.browser.js"></script>
+
+  <script>
+    let client = null;
+    let channel = "";
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const log = (line) => { logEl.textContent = `${line}\n${logEl.textContent}`.slice(0, 4000); };
+
+    document.getElementById("connect").addEventListener("click", async () => {
+      const apiKey = document.getElementById("api-key").value.trim();
+      channel = document.getElementById("channel").value.trim();
+      client = new DataNet({ apiKey, deviceId: "browser-basic-example" });
+
+      client.on("connect", () => { statusEl.textContent = "connected"; });
+      client.on("disconnect", () => { statusEl.textContent = "disconnected"; });
+      client.on("error", (err) => log(`error: ${err.message ?? err}`));
+
+      client.subscribe(channel, (data, meta) => {
+        log(`${new Date(meta.timestamp).toLocaleTimeString()} <- ${JSON.stringify(data)}`);
+      });
+
+      statusEl.textContent = "connecting...";
+      await client.connect();
+    });
+
+    document.getElementById("send").addEventListener("click", () => {
+      if (!client) {
+        log("connect first");
+        return;
+      }
+      client.publish(channel, { hello: "from the browser", sentAt: Date.now() });
+    });
+  </script>
+</body>
+</html>
