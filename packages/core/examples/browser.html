@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataNet — browser example</title>
+  <style>
+    body { font-family: ui-monospace, monospace; background: #0d0d1a; color: #ccc; padding: 24px; }
+    h1 { font-size: 1rem; color: #e0e0ff; }
+    #status { margin: 12px 0; }
+    #log { white-space: pre-wrap; font-size: 0.85rem; color: #9f9; }
+    button { font: inherit; padding: 6px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>DataNet browser example</h1>
+  <p id="status">connecting…</p>
+  <button id="send">Publish a test message</button>
+  <div id="log"></div>
+
+  <!--
+    From a clone of this repo, build first (pnpm build), then open this file.
+    In your own project, use the CDN instead:
+    <script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+  -->
+  <script src="../dist/datanet.browser.js"></script>
+
+  <script>
+    // Get an API key and channel from your dashboard at https://app.datanet.art
+    const API_KEY = "ak_your_api_key_here";
+    const CHANNEL = "project.your_project_id.demo";
+
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const log = (line) => { logEl.textContent = `${line}\n${logEl.textContent}`.slice(0, 4000); };
+
+    const client = new DataNet({ apiKey: API_KEY });
+
+    client.on("connect", () => { statusEl.textContent = "connected"; });
+    client.on("disconnect", () => { statusEl.textContent = "disconnected"; });
+    client.on("error", (err) => log(`error: ${err.message ?? err}`));
+
+    client.subscribe(CHANNEL, (data, meta) => {
+      log(`${new Date(meta.timestamp).toLocaleTimeString()} ← ${JSON.stringify(data)}`);
+    });
+
+    document.getElementById("send").addEventListener("click", () => {
+      client.publish(CHANNEL, { hello: "from the browser", sentAt: Date.now() });
+    });
+
+    client.connect().catch(() => {});
+  </script>
+</body>
+</html>

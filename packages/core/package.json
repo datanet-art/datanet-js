@@ -1,0 +1,54 @@
+{
+  "name": "@datanet/core",
+  "version": "0.1.0",
+  "description": "DataNet JavaScript SDK — realtime pub/sub for browsers and Node.js. Auth, channels, heartbeat, and reconnection for the DataNet platform.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/datanet.js",
+  "module": "./dist/datanet.js",
+  "types": "./dist/datanet.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/datanet.d.ts",
+      "import": "./dist/datanet.js"
+    }
+  },
+  "jsdelivr": "./dist/datanet.browser.min.js",
+  "unpkg": "./dist/datanet.browser.min.js",
+  "files": ["dist"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "datanet",
+    "realtime",
+    "websocket",
+    "pubsub",
+    "iot",
+    "creative-coding"
+  ],
+  "homepage": "https://datanet.art",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datanet-art/datanet-js.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/datanet-art/datanet-js/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.4",
+    "vitest": "^3.0.0",
+    "ws": "^8.18.0"
+  }
+}

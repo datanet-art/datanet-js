@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataNet — p5.js Live Scatter Plot</title>
+  <style>
+    /* Reset and dark background so the canvas sits cleanly. */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+    body { background: #0d0d1a; display: flex; flex-direction: column; align-items: stretch; min-height: 100vh; font-family: monospace; color: #ccc; touch-action: none; }
+    header { padding: 16px 24px; width: 100%; display: flex; align-items: center; gap: 16px; background: #12122a; border-bottom: 1px solid #1e1e40; }
+    header h1 { font-size: 1rem; font-weight: 600; color: #e0e0ff; }
+    header span { font-size: 0.75rem; color: #777; }
+    main { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: hidden; }
+    /* The p5 canvas is inserted here by the sketch. */
+    canvas { display: block; max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 4px 32px rgba(0,0,0,0.5); touch-action: none; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>DataNet Live Scatter Plot</h1>
+    <span>global mode · p5.js</span>
+  </header>
+
+  <main id="sketch-container"></main>
+
+  <!--
+    Load p5.js from CDN.
+    Pin to a specific version for reproducibility.
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+
+  <!--
+    Load the DataNet p5 addon AFTER p5.js so it can register itself on p5.prototype.
+  -->
+  <script src="../../src/datanet-p5.js"></script>
+
+  <!-- Your sketch -->
+  <script src="sketch.js"></script>
+
+</body>
+</html>

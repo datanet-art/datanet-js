@@ -1,0 +1,45 @@
+{
+  "name": "@datanet/p5",
+  "version": "0.1.0",
+  "description": "DataNet addon for p5.js — realtime pub/sub for sketches, in global and instance mode.",
+  "license": "MIT",
+  "main": "./dist/datanet-p5.js",
+  "jsdelivr": "./dist/datanet-p5.min.js",
+  "unpkg": "./dist/datanet-p5.min.js",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "echo 'no typecheck (plain JS)'",
+    "test": "echo 'no tests yet'"
+  },
+  "peerDependencies": {
+    "p5": ">=1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "p5": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "datanet",
+    "p5",
+    "p5js",
+    "realtime",
+    "websocket",
+    "pubsub",
+    "creative-coding"
+  ],
+  "homepage": "https://datanet.art",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datanet-art/datanet-js.git",
+    "directory": "packages/p5"
+  },
+  "bugs": "https://github.com/datanet-art/datanet-js/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
