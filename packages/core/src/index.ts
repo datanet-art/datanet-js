@@ -62,10 +62,7 @@ export interface PublishOptions {
   metadata?: Record<string, unknown>;
 }
 
-export interface PublishBinaryOptions {
-  contentType?: BinaryContentType;
-  metadata?: Record<string, unknown>;
-}
+export type PublishBinaryOptions = PublishOptions;
 
 export interface SubscribeBinaryOptions {
   contentType?: BinaryContentType;
@@ -88,6 +85,8 @@ export interface DataNetErrorDetails {
   retryMs?: number;
   scope?: string;
   status?: number;
+  /** Plan limit that was hit, e.g. device or channel cap (device_limit_reached, topic_limit_reached) */
+  limit?: number;
 }
 
 export class DataNetError extends Error {
@@ -96,6 +95,7 @@ export class DataNetError extends Error {
   readonly retryMs?: number;
   readonly scope?: string;
   readonly status?: number;
+  readonly limit?: number;
 
   constructor(details: DataNetErrorDetails) {
     super(details.message);
@@ -105,6 +105,7 @@ export class DataNetError extends Error {
     this.retryMs = details.retryMs;
     this.scope = details.scope;
     this.status = details.status;
+    this.limit = details.limit;
   }
 }
 
@@ -485,7 +486,7 @@ export class DataNet {
     if (channels.size > 1) {
       this.emit(
         "error",
-        new Error("DataNet: binary frame received, but multiple binary channels are subscribed; use one binary channel per connection until binary metadata is available.")
+        new Error("DataNet: raw binary frame received with multiple binary channels active; raw frames cannot be routed without metadata")
       );
       return;
     }
@@ -528,11 +529,13 @@ export class DataNet {
     const channel = typeof msg.channel === "string" ? msg.channel : typeof msg.ch === "string" ? msg.ch : undefined;
     const retryMs = typeof msg.retry_ms === "number" ? msg.retry_ms : undefined;
     const scope = typeof msg.scope === "string" ? msg.scope : undefined;
+    const limit = typeof msg.limit === "number" ? msg.limit : undefined;
     return new DataNetError({
       code,
       channel,
       retryMs,
       scope,
+      limit,
       message: `DataNet: ${String(msg.error ?? code)}${channel ? ` (${channel})` : ""}`,
     });
   }

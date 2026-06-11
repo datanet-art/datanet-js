@@ -321,3 +321,152 @@ describe("DataNet", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("DataNet — gateway limit errors", () => {
+  type Listener = (event: { data?: unknown }) => void;
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances: FakeWebSocket[] = [];
+    readyState = 1;
+    sent: string[] = [];
+    listeners = new Map<string, Listener[]>();
+
+    constructor() {
+      FakeWebSocket.instances.push(this);
+    }
+
+    addEventListener(event: string, listener: Listener) {
+      this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener]);
+    }
+
+    send(payload: string) {
+      this.sent.push(payload);
+    }
+
+    close() {
+      this.emit("close", {});
+    }
+
+    emit(event: string, payload: { data?: unknown }) {
+      for (const listener of this.listeners.get(event) ?? []) listener(payload);
+    }
+  }
+
+  function handleMessage(client: DataNet, payload: Record<string, unknown>) {
+    (client as unknown as { handleMessage(raw: string): void }).handleMessage(JSON.stringify(payload));
+  }
+
+  it("rejects connect() with a structured device_limit_reached error and does not reconnect", async () => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const client = new DataNet({ apiKey: "ak_test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+    Object.assign(client as unknown as Record<string, unknown>, { jwt: "token" });
+    const scheduleReconnect = vi.fn();
+    Object.assign(client as unknown as Record<string, unknown>, { scheduleReconnect });
+
+    const opened = (client as unknown as { openSocket(): Promise<void> }).openSocket();
+    const ws = FakeWebSocket.instances[0]!;
+    ws.emit("open", {});
+    // Gateway sends the limit error pre-handshake and closes the socket
+    ws.emit("message", {
+      data: JSON.stringify({ type: "error", error: "device_limit_reached", limit: 25 }),
+    });
+    ws.emit("close", {});
+
+    await expect(opened).rejects.toMatchObject({
+      name: "DataNetError",
+      code: "device_limit_reached",
+      limit: 25,
+    });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(scheduleReconnect).not.toHaveBeenCalled();
+  });
+
+  it("emits a rate_limited error with retryMs and connection scope mid-session", () => {
+    const client = new DataNet({ apiKey: "ak_test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+
+    handleMessage(client, {
+      type: "error",
+      error: "rate_limited",
+      retry_ms: 250,
+      scope: "connection",
+      channel: "project.p1.sensor",
+    });
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toMatchObject({
+      name: "DataNetError",
+      code: "rate_limited",
+      retryMs: 250,
+      scope: "connection",
+      channel: "project.p1.sensor",
+    });
+  });
+
+  it("emits a project-wide rate_limited error without a connection scope", () => {
+    const client = new DataNet({ apiKey: "ak_test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+
+    handleMessage(client, {
+      type: "error",
+      error: "rate_limited",
+      retry_ms: 1000,
+      channel: "project.p1.sensor",
+    });
+
+    const error = onError.mock.calls[0][0] as DataNetError;
+    expect(error.code).toBe("rate_limited");
+    expect(error.retryMs).toBe(1000);
+    expect(error.scope).toBeUndefined();
+  });
+
+  it("emits a topic_limit_reached error carrying the plan's channel cap", () => {
+    const client = new DataNet({ apiKey: "ak_test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+
+    handleMessage(client, {
+      type: "error",
+      error: "topic_limit_reached",
+      limit: 240,
+      channel: "project.p1.one-channel-too-many",
+      operation: "sub",
+    });
+
+    expect(onError.mock.calls[0][0]).toMatchObject({
+      name: "DataNetError",
+      code: "topic_limit_reached",
+      limit: 240,
+      channel: "project.p1.one-channel-too-many",
+    });
+  });
+
+  it("emits channel_not_allowed and insufficient_scope as structured errors", () => {
+    const client = new DataNet({ apiKey: "ak_test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+
+    handleMessage(client, {
+      type: "error",
+      error: "channel_not_allowed",
+      channel: "project.other.secret",
+    });
+    handleMessage(client, {
+      type: "error",
+      error: "insufficient_scope",
+      required: "pub",
+    });
+
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError.mock.calls[0][0]).toMatchObject({
+      code: "channel_not_allowed",
+      channel: "project.other.secret",
+    });
+    expect(onError.mock.calls[1][0]).toMatchObject({ code: "insufficient_scope" });
+  });
+});
