@@ -167,6 +167,78 @@ dn.publish("project.<pid>.position", { x: mouseX, y: mouseY });
 
 ---
 
+## Binary pub/sub — DMX and Art-Net
+
+For lighting installations and hardware bridges, the p5 client can send and
+receive raw binary frames alongside JSON messages.
+
+### `dn.publishBinary(channel, data, options?)` → `DataNetP5`
+
+Publish raw bytes with an explicit content type.
+
+```js
+dn.publishBinary("project.<pid>.lighting.dmx", dmxFrame, {
+  contentType: "binary/dmx",
+  metadata: { universe: 1 },
+});
+```
+
+### `dn.subscribeBinary(channel, handler)` → `DataNetP5`
+
+Receive raw bytes. `handler` is called with `(bytes: Uint8Array, meta)`.
+
+```js
+dn.subscribeBinary("project.<pid>.lighting.dmx", (bytes, meta) => {
+  console.log(meta.contentType, meta.bytes, bytes[0]);
+  // meta.metadata contains any application metadata the publisher set
+});
+```
+
+### `dn.unsubscribeBinary(channel, handler?)` → `DataNetP5`
+
+Remove a binary subscription. If `handler` is omitted all handlers for the
+channel are removed.
+
+### `dn.publishDmx(channel, values, options?)` → `DataNetP5`
+
+Clamp `values` into a 1–512 byte DMX frame and publish as `binary/dmx`.
+Values are clamped to 0–255 and the frame is zero-padded to `length`.
+
+```js
+// Set first 4 channels, send a full 512-byte frame
+dn.publishDmx("project.<pid>.lighting.dmx", [255, 80, 20, 180]);
+
+// Shorter frame
+dn.publishDmx("project.<pid>.lighting.dmx", [255, 80, 20, 180], { length: 4 });
+```
+
+### `dn.publishArtNet(channel, dmx, options?)` → `DataNetP5`
+
+Build an Art-Net ArtDMX packet and publish as `binary/artnet`.
+
+```js
+dn.publishArtNet("project.<pid>.lighting.artnet", [255, 80, 20, 180], {
+  universe: 0,
+  subnet: 0,
+  net: 0,
+});
+```
+
+### Standalone helpers
+
+`buildDmxFrame` and `buildArtDmxPacket` are available directly for building
+frames without a client:
+
+```js
+const { buildDmxFrame, buildArtDmxPacket } = require("@datanet/p5");
+const frame = buildDmxFrame([255, 80, 20, 180], 512);
+```
+
+For ESM / TypeScript projects, use `@datanet/core` which has full type
+definitions for these helpers.
+
+---
+
 ## Message buffers
 
 The client keeps a rolling buffer of the last 100 messages per channel,

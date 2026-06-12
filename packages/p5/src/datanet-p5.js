@@ -233,6 +233,224 @@
     return this;
   };
 
+  // ── Binary pub/sub ────────────────────────────────────────────────────────
+
+  /**
+   * Publish raw bytes to a binary channel with an explicit content type.
+   * Useful for DMX, Art-Net, sensor frames, and other compact binary payloads.
+   *
+   * @param {string}      channel
+   * @param {Uint8Array|ArrayBuffer} data
+   * @param {object}      [options]
+   * @param {string}      [options.contentType]  e.g. "binary/dmx", "binary/artnet"
+   * @param {object}      [options.metadata]     Application metadata forwarded to subscribers
+   * @returns {DataNetP5} this (chainable)
+   */
+  DataNetP5.prototype.publishBinary = function (channel, data, options) {
+    if (!this._connected) {
+      this._fireError(new Error('DataNet: not connected — call connect() first'));
+      return this;
+    }
+    var opts = options || {};
+    var bytes = toUint8Array(data);
+    var b64   = binaryToBase64(bytes);
+    var envelope = {
+      op:  'pub',
+      ch:  channel,
+      bin: true,
+      b64: b64,
+      ct:  opts.contentType || 'application/octet-stream',
+    };
+    if (opts.metadata) envelope.meta = opts.metadata;
+    this._sendRaw(JSON.stringify(envelope));
+    return this;
+  };
+
+  /**
+   * Subscribe to a binary channel.
+   * handler receives (bytes: Uint8Array, meta: {channel, from, timestamp, contentType, bytes, metadata})
+   *
+   * @param {string}   channel
+   * @param {function} handler
+   * @returns {DataNetP5} this (chainable)
+   */
+  DataNetP5.prototype.subscribeBinary = function (channel, handler) {
+    if (!this._binaryListeners) this._binaryListeners = {};
+    if (!this._binaryListeners[channel]) {
+      this._binaryListeners[channel] = [];
+    }
+    this._binaryListeners[channel].push(handler);
+    if (this._connected) {
+      this._sendRaw(this._subEnvelope(channel));
+    }
+    return this;
+  };
+
+  /**
+   * Remove a binary subscription.
+   * If handler is omitted all binary handlers for the channel are removed.
+   *
+   * @param {string}    channel
+   * @param {function} [handler]
+   * @returns {DataNetP5} this (chainable)
+   */
+  DataNetP5.prototype.unsubscribeBinary = function (channel, handler) {
+    if (!this._binaryListeners || !this._binaryListeners[channel]) return this;
+    if (handler) {
+      var fns = this._binaryListeners[channel];
+      var idx = fns.indexOf(handler);
+      if (idx !== -1) fns.splice(idx, 1);
+      if (fns.length === 0) {
+        delete this._binaryListeners[channel];
+        if (this._connected) this._sendRaw(this._unsubEnvelope(channel));
+      }
+    } else {
+      delete this._binaryListeners[channel];
+      if (this._connected) this._sendRaw(this._unsubEnvelope(channel));
+    }
+    return this;
+  };
+
+  /**
+   * Clamp values into a DMX frame (1–512 bytes, values 0–255) and publish
+   * as binary/dmx.
+   *
+   * @param {string}           channel
+   * @param {ArrayLike<number>} values   Channel values (index = channel address, 0-based)
+   * @param {object}           [options]
+   * @param {number}           [options.length=512]  Frame length (1–512)
+   * @returns {DataNetP5} this (chainable)
+   */
+  DataNetP5.prototype.publishDmx = function (channel, values, options) {
+    var opts   = options || {};
+    var length = typeof opts.length === 'number' ? opts.length : 512;
+    var frame  = buildDmxFrame(values, length);
+    return this.publishBinary(channel, frame, { contentType: 'binary/dmx' });
+  };
+
+  /**
+   * Build an Art-Net ArtDMX packet from DMX values and publish as binary/artnet.
+   *
+   * @param {string}           channel
+   * @param {ArrayLike<number>|Uint8Array|ArrayBuffer} dmx  DMX values
+   * @param {object}           [options]
+   * @param {number}           [options.universe=0]
+   * @param {number}           [options.subnet=0]
+   * @param {number}           [options.net=0]
+   * @param {number}           [options.sequence=0]
+   * @param {number}           [options.physical=0]
+   * @returns {DataNetP5} this (chainable)
+   */
+  DataNetP5.prototype.publishArtNet = function (channel, dmx, options) {
+    var packet = buildArtDmxPacket(dmx, options || {});
+    return this.publishBinary(channel, packet, { contentType: 'binary/artnet' });
+  };
+
+  // ── Binary helpers (also available as standalone functions) ────────────────
+
+  /**
+   * Build a DMX frame from an array of channel values.
+   * Values are clamped to 0–255; the frame is padded to `length` bytes.
+   *
+   * @param {ArrayLike<number>} values
+   * @param {number}            [length=512]
+   * @returns {Uint8Array}
+   */
+  function buildDmxFrame(values, length) {
+    var frameLength = clampRange(typeof length === 'number' ? length : 512, 1, 512);
+    var frame = new Uint8Array(frameLength);
+    var count = Math.min(values.length, frameLength);
+    for (var i = 0; i < count; i++) {
+      frame[i] = clampByte(Number(values[i]));
+    }
+    return frame;
+  }
+
+  /**
+   * Build an Art-Net ArtDMX UDP payload.
+   *
+   * @param {ArrayLike<number>|Uint8Array|ArrayBuffer} dmx
+   * @param {object} [options]
+   * @param {number} [options.universe=0]
+   * @param {number} [options.subnet=0]
+   * @param {number} [options.net=0]
+   * @param {number} [options.sequence=0]
+   * @param {number} [options.physical=0]
+   * @returns {Uint8Array}
+   */
+  function buildArtDmxPacket(dmx, options) {
+    var opts = options || {};
+    var dmxBytes = (ArrayBuffer.isView(dmx) || dmx instanceof ArrayBuffer)
+      ? toUint8Array(dmx)
+      : buildDmxFrame(dmx, Math.min(Math.max(dmx.length, 2), 512));
+    var frameLength = clampRange(Math.max(dmxBytes.length, 2), 2, 512);
+    var packet = new Uint8Array(18 + frameLength);
+    var header = 'Art-Net';
+    for (var i = 0; i < header.length; i++) packet[i] = header.charCodeAt(i);
+    packet[7]  = 0x00;
+    packet[8]  = 0x00;
+    packet[9]  = 0x50;
+    packet[10] = 0x00;
+    packet[11] = 14;
+    packet[12] = clampByte(opts.sequence || 0);
+    packet[13] = clampByte(opts.physical || 0);
+    var universe    = clampRange(opts.universe || 0, 0, 15);
+    var subnet      = clampRange(opts.subnet   || 0, 0, 15);
+    var net         = clampRange(opts.net       || 0, 0, 127);
+    var portAddress = (subnet << 4) | universe;
+    packet[14] = portAddress & 0xff;
+    packet[15] = net & 0x7f;
+    packet[16] = (frameLength >> 8) & 0xff;
+    packet[17] = frameLength & 0xff;
+    packet.set(dmxBytes.subarray(0, frameLength), 18);
+    return packet;
+  }
+
+  // ── Binary encoding helpers ────────────────────────────────────────────────
+
+  function clampByte(value) {
+    if (!isFinite(value)) return 0;
+    return Math.max(0, Math.min(255, Math.trunc(value)));
+  }
+
+  function clampRange(value, min, max) {
+    if (!isFinite(value)) return min;
+    return Math.max(min, Math.min(max, Math.trunc(value)));
+  }
+
+  function toUint8Array(data) {
+    if (data instanceof Uint8Array) return data;
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    throw new Error('DataNet: data must be a Uint8Array, ArrayBuffer, or ArrayBufferView');
+  }
+
+  function binaryToBase64(data) {
+    var bytes = toUint8Array(data);
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(bytes).toString('base64');
+    }
+    var binary = '';
+    var chunkSize = 0x8000;
+    for (var offset = 0; offset < bytes.length; offset += chunkSize) {
+      var chunk = bytes.subarray(offset, offset + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBinary(encoded) {
+    if (typeof Buffer !== 'undefined') {
+      return new Uint8Array(Buffer.from(encoded, 'base64'));
+    }
+    var binary = atob(encoded);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
   // ── Buffer / Query API ─────────────────────────────────────────────────────
 
   /**
@@ -392,6 +610,11 @@
         Object.keys(self._listeners).forEach(function (ch) {
           self._sendRaw(self._subEnvelope(ch));
         });
+        if (self._binaryListeners) {
+          Object.keys(self._binaryListeners).forEach(function (ch) {
+            self._sendRaw(self._subEnvelope(ch));
+          });
+        }
 
         self._startHeartbeat();
 
@@ -485,9 +708,34 @@
     if (env.op !== 'pub') return;  // ignore sub-acks, hb-acks
 
     var channel   = env.ch   || '';
-    var data      = env.d    || {};
     var from      = env.from || '';
     var timestamp = env.ts   || 0;
+
+    // Binary envelope — dispatch to binary subscribers.
+    if (env.bin === true && typeof env.b64 === 'string') {
+      var binaryFns = self._binaryListeners && self._binaryListeners[channel];
+      if (binaryFns && binaryFns.length > 0) {
+        try {
+          var bytes = base64ToBinary(env.b64);
+          var binMeta = {
+            channel:     channel,
+            from:        from,
+            timestamp:   timestamp,
+            contentType: env.ct || 'application/octet-stream',
+            bytes:       typeof env.bytes === 'number' ? env.bytes : bytes.byteLength,
+            metadata:    env.meta || undefined,
+          };
+          binaryFns.forEach(function (fn) {
+            try { fn(bytes, binMeta); } catch (err) { self._fireError(err); }
+          });
+        } catch (err) {
+          self._fireError(err);
+        }
+      }
+      return;
+    }
+
+    var data = env.d || {};
 
     // Store in per-channel buffer.
     if (!self._buffers[channel]) self._buffers[channel] = [];
@@ -495,7 +743,6 @@
     self._buffers[channel].push(entry);
 
     // Trim buffer to DEFAULT_BUFFER_LENGTH to avoid unbounded growth.
-    // (getBuffer() callers can request shorter slices.)
     if (self._buffers[channel].length > DEFAULT_BUFFER_LENGTH) {
       self._buffers[channel].shift();
     }
@@ -633,5 +880,5 @@
   }
 
   // Export for module consumers (Node test environments, bundlers, etc.).
-  return { DataNetP5: DataNetP5, createDataNet: createDataNet };
+  return { DataNetP5: DataNetP5, createDataNet: createDataNet, buildDmxFrame: buildDmxFrame, buildArtDmxPacket: buildArtDmxPacket };
 }));
