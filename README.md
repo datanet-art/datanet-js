@@ -86,6 +86,17 @@ include a changeset: `pnpm changeset`.
 To develop against a local DataNet gateway, point the client at it with
 `apiUrl`/`wsUrl` (or `DATANET_API_URL`/`DATANET_WS_URL` for the examples).
 
+## About
+
+DataNet is developed and supported by [Studio Jordan Shaw](https://www.jordanshaw.com), a creative technology studio building tools for realtime, networked, and physical-digital work.
+
+- DataNet: [datanet.art](https://datanet.art)
+- Studio: [jordanshaw.com](https://www.jordanshaw.com)
+- Instagram: [@jshaw3](https://www.instagram.com/jshaw3)
+- GitHub: [datanet-art](https://github.com/datanet-art)
+- Source: [datanet-js](https://github.com/datanet-art/datanet-js)
+- Examples: [datanet-examples](https://github.com/datanet-art/datanet-examples)
+
 ## License
 
 [MIT](LICENSE)
