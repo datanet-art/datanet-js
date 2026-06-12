@@ -11,7 +11,7 @@ In the p5.js Web Editor or any HTML sketch, load it after p5.js:
 
 ```html
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@datanet/p5@0.1/dist/datanet-p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@datanet/p5@0/dist/datanet-p5.min.js"></script>
 ```
 
 Or via npm for bundled projects:

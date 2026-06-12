@@ -22,7 +22,7 @@ pnpm add @datanet/core
 Or with a script tag (exposes `window.DataNet`):
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0/dist/datanet.browser.min.js"></script>
 ```
 
 Pin a version in production — installations should never float on "latest".
@@ -342,7 +342,7 @@ import { DataNet } from "@datanet/core";
 ## Browser script tag
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0/dist/datanet.browser.min.js"></script>
 <script>
   const client = new DataNet({ apiKey: "ak_...", deviceId: "browser-ui" });
   const dmx = DataNet.buildDmxFrame([255, 80, 20, 180], 512);

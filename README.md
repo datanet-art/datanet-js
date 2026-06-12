@@ -16,7 +16,7 @@ Art-Net, float vectors, BLE batches, and compact interaction frames.
 ## Quick start (browser, no build step)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@datanet/core@0/dist/datanet.browser.min.js"></script>
 <script>
   const client = new DataNet({ apiKey: "ak_..." });
   client.subscribe("project.<pid>.demo", (data, meta) => console.log(data, meta));
