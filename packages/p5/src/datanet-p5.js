@@ -67,6 +67,9 @@
    *
    * @param {string}  apiKey   DataNet API key (starts with ak_).
    * @param {object}  options
+   * @param {string}  [options.deviceId]            Stable device identifier for device limits and history metadata.
+   * @param {string}  [options.clientId]            Client/app identifier for connection tracking.
+   * @param {string}  [options.deviceName]          Display name shown in dashboards and admin tools.
    * @param {string}  [options.apiUrl]              Override HTTP base URL.
    * @param {string}  [options.wsUrl]               Override WebSocket URL.
    * @param {boolean} [options.debug]               Log protocol messages to console.
@@ -75,7 +78,10 @@
   function DataNetP5(apiKey, options) {
     var opts = options || {};
 
-    this._apiKey  = apiKey;
+    this._apiKey     = apiKey;
+    this._deviceId   = opts.deviceId   || null;
+    this._clientId   = opts.clientId   || null;
+    this._deviceName = opts.deviceName || null;
     this._apiUrl  = (opts.apiUrl  || DEFAULT_API_URL).replace(/\/$/, '');
     this._wsUrl   = opts.wsUrl   || DEFAULT_WS_URL;
     this._debug   = !!opts.debug;
@@ -566,7 +572,11 @@
   DataNetP5.prototype._fetchToken = function () {
     var self = this;
     var url  = self._apiUrl + '/auth/token';
-    var body = JSON.stringify({ apiKey: self._apiKey });
+    var payload = { apiKey: self._apiKey };
+    if (self._deviceId)   payload.deviceId   = self._deviceId;
+    if (self._clientId)   payload.clientId   = self._clientId;
+    if (self._deviceName) payload.deviceName = self._deviceName;
+    var body = JSON.stringify(payload);
 
     return fetch(url, {
       method:  'POST',

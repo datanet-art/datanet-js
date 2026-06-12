@@ -72,6 +72,9 @@ The client automatically disconnects when the sketch is removed (via
 
 | Option | Default | Description |
 |---|---|---|
+| `deviceId` | — | Stable device identifier for device limits and history metadata |
+| `clientId` | — | Client/app identifier for connection tracking |
+| `deviceName` | — | Display name shown in dashboards and admin tools |
 | `apiUrl` | `https://api.datanet.art` | Override the REST base URL (local dev) |
 | `wsUrl` | `wss://ws.datanet.art/ws` | Override the WebSocket URL |
 | `debug` | `false` | Log protocol messages to the console |
@@ -79,6 +82,8 @@ The client automatically disconnects when the sketch is removed (via
 
 ```js
 dn = createDataNet("ak_...", {
+  deviceId: "installation-01",
+  deviceName: "Main Installation",
   debug: true,
   maxReconnectAttempts: 3,
 });
