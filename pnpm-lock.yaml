@@ -32,6 +32,9 @@ importers:
 
   packages/p5:
     dependencies:
+      '@datanet/core':
+        specifier: workspace:*
+        version: link:../core
       p5:
         specifier: '>=1.4.0'
         version: 2.3.0

@@ -15,6 +15,9 @@
     "typecheck": "echo 'no typecheck (plain JS)'",
     "test": "echo 'no tests yet'"
   },
+  "dependencies": {
+    "@datanet/core": "workspace:*"
+  },
   "peerDependencies": {
     "p5": ">=1.4.0"
   },
