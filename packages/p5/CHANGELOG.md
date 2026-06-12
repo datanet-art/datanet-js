@@ -1,5 +1,17 @@
 # @datanet/p5
 
+## 0.2.0
+
+### Minor Changes
+
+- 812675b: Add binary pub/sub, DMX, and Art-Net support: `publishBinary`, `subscribeBinary`, `unsubscribeBinary`, `publishDmx`, `publishArtNet`, `buildDmxFrame`, and `buildArtDmxPacket` — matching the binary API available in `@datanet/core`.
+
+### Patch Changes
+
+- ae75232: Complete API reference in both READMEs: all methods, options, error codes, token refresh, static helpers, and binary pub/sub documented.
+- Updated dependencies [ae75232]
+  - @datanet/core@0.1.1
+
 ## 0.1.1
 
 ### Patch Changes
