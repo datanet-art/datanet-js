@@ -2,9 +2,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const envPath = join(dirname(fileURLToPath(import.meta.url)), ".env");
+const exampleDir = dirname(fileURLToPath(import.meta.url));
+const envPaths = [
+  join(exampleDir, ".env"),
+  join(dirname(exampleDir), ".env"),
+  join(dirname(dirname(exampleDir)), ".env"),
+];
 
-if (existsSync(envPath)) {
+for (const envPath of envPaths) {
+  if (!existsSync(envPath)) continue;
   const lines = readFileSync(envPath, "utf8").split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
