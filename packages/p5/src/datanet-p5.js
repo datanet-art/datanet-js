@@ -620,19 +620,14 @@
 
   if (p5constructor) {
     // Instance mode: p.createDataNet(...)
+    // p5.js automatically promotes p5.prototype methods to window globals in
+    // global mode — do not also set window.createDataNet manually or p5 will
+    // warn about a naming conflict on startup.
     p5constructor.prototype.createDataNet = createDataNet;
-  }
-
-  // Register a global-mode factory so sketches can call
-  // window.createDataNet() even if p5 is not visible at addon-load time.
-  if (browserGlobal && typeof browserGlobal.createDataNet !== 'function') {
+  } else if (browserGlobal && typeof browserGlobal.createDataNet !== 'function') {
+    // No p5 constructor found at load time (e.g. script loaded before p5).
+    // Register on window as a fallback so global-mode sketches still work.
     browserGlobal.createDataNet = function (apiKey, options) {
-      return new DataNetP5(apiKey, options);
-    };
-  }
-
-  if (universalGlobal && typeof universalGlobal.createDataNet !== 'function') {
-    universalGlobal.createDataNet = function (apiKey, options) {
       return new DataNetP5(apiKey, options);
     };
   }
