@@ -1,12 +1,15 @@
 {
   "name": "@datanet/p5",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "DataNet addon for p5.js — realtime pub/sub for sketches, in global and instance mode.",
   "license": "MIT",
   "main": "./dist/datanet-p5.js",
   "jsdelivr": "./dist/datanet-p5.min.js",
   "unpkg": "./dist/datanet-p5.min.js",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "echo 'no typecheck (plain JS)'",

@@ -1,6 +1,6 @@
 {
   "name": "@datanet/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "DataNet JavaScript SDK — realtime pub/sub for browsers and Node.js. Auth, channels, heartbeat, and reconnection for the DataNet platform.",
   "license": "MIT",
   "type": "module",
@@ -15,7 +15,9 @@
   },
   "jsdelivr": "./dist/datanet.browser.min.js",
   "unpkg": "./dist/datanet.browser.min.js",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "engines": {
     "node": ">=20"
