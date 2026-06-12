@@ -4,6 +4,13 @@
   "description": "DataNet addon for p5.js — realtime pub/sub for sketches, in global and instance mode.",
   "license": "MIT",
   "main": "./dist/datanet-p5.js",
+  "module": "./dist/datanet-p5.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/datanet-p5.esm.js",
+      "require": "./dist/datanet-p5.js"
+    }
+  },
   "jsdelivr": "./dist/datanet-p5.min.js",
   "unpkg": "./dist/datanet-p5.min.js",
   "files": [

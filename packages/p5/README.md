@@ -77,14 +77,12 @@ The client automatically disconnects when the sketch is removed (via
 | `deviceName` | — | Display name shown in dashboards and admin tools |
 | `apiUrl` | `https://api.datanet.art` | Override the REST base URL (local dev) |
 | `wsUrl` | `wss://ws.datanet.art/ws` | Override the WebSocket URL |
-| `debug` | `false` | Log protocol messages to the console |
 | `maxReconnectAttempts` | `5` | Reconnect attempts before giving up |
 
 ```js
 dn = createDataNet("ak_...", {
   deviceId: "installation-01",
   deviceName: "Main Installation",
-  debug: true,
   maxReconnectAttempts: 3,
 });
 ```
@@ -231,16 +229,16 @@ dn.publishArtNet("project.<pid>.lighting.artnet", [255, 80, 20, 180], {
 
 ### Standalone helpers
 
-`buildDmxFrame` and `buildArtDmxPacket` are available directly for building
-frames without a client:
+`buildDmxFrame` and `buildArtDmxPacket` are available as named exports for
+bundler / Node.js projects:
 
 ```js
-const { buildDmxFrame, buildArtDmxPacket } = require("@datanet/p5");
+import { buildDmxFrame, buildArtDmxPacket } from "@datanet/p5";
 const frame = buildDmxFrame([255, 80, 20, 180], 512);
 ```
 
-For ESM / TypeScript projects, use `@datanet/core` which has full type
-definitions for these helpers.
+For TypeScript projects, `@datanet/core` provides the same helpers with full
+type definitions.
 
 ---
 

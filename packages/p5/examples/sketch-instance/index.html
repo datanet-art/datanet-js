@@ -25,7 +25,14 @@
   <main id="sketch-instance-container"></main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-  <script src="../../src/datanet-p5.js"></script>
+
+  <!--
+    Load the DataNet p5 addon AFTER p5.js so it can register itself on p5.prototype.
+    CDN (production):
+    <script src="https://cdn.jsdelivr.net/npm/@datanet/p5@0.1/dist/datanet-p5.min.js"></script>
+  -->
+  <script src="../../dist/datanet-p5.js"></script>
+
   <script src="sketch.js"></script>
 
 </body>

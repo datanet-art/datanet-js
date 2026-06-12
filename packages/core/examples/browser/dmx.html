@@ -24,6 +24,13 @@
   <button id="send">Send DMX frame</button>
   <div id="log"></div>
 
+  <!--
+    From a clone of this repo, build first:
+    pnpm --filter @datanet/core build
+
+    In your own project, use the CDN instead:
+    <script src="https://cdn.jsdelivr.net/npm/@datanet/core@0.1/dist/datanet.browser.min.js"></script>
+  -->
   <script src="../../dist/datanet.browser.js"></script>
   <script>
     const log = (line) => {

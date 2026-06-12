@@ -11,21 +11,32 @@ import { buildSync } from "esbuild";
 const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const banner = `/*! @datanet/p5 v${version} | MIT | https://datanet.art */`;
 
-const shared = {
+// IIFE — self-contained for <script> tag use; bundles @datanet/core so there
+// is no external dependency at runtime.
+const iife = {
   entryPoints: ["src/datanet-p5.js"],
   bundle: true,
   format: "iife",
   globalName: "_DataNetP5Exports",
-  // p5 is a peer dep loaded separately — don't bundle it.
-  // Reference to `p5` global is resolved at runtime.
   external: ["p5"],
+  banner: { js: banner },
+  logLevel: "warning",
+};
+
+// ESM — for bundlers (webpack, Vite, etc.) and npm consumers. @datanet/core
+// is left as an external so bundlers can deduplicate it.
+const esm = {
+  entryPoints: ["src/datanet-p5.js"],
+  bundle: false,
+  format: "esm",
   banner: { js: banner },
   logLevel: "warning",
 };
 
 mkdirSync("dist", { recursive: true });
 
-buildSync({ ...shared, outfile: "dist/datanet-p5.js",     minify: false });
-buildSync({ ...shared, outfile: "dist/datanet-p5.min.js", minify: true  });
+buildSync({ ...iife, outfile: "dist/datanet-p5.js",     minify: false });
+buildSync({ ...iife, outfile: "dist/datanet-p5.min.js", minify: true  });
+buildSync({ ...esm,  outfile: "dist/datanet-p5.esm.js", minify: false });
 
-console.log(`built dist/datanet-p5.js and dist/datanet-p5.min.js (v${version})`);
+console.log(`built IIFE + ESM dist files (v${version})`);
