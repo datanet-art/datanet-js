@@ -32,6 +32,12 @@ export interface MessageMeta {
   timestamp: number;
 }
 
+/** Authoritative channel occupancy returned by the DataNet presence API. */
+export interface PresenceResult {
+  occupancy: number;
+  members: string[];
+}
+
 export type MessageHandler = (data: unknown, meta: MessageMeta) => void;
 export type BinaryData = ArrayBuffer | ArrayBufferView;
 export type BinaryContentType =
@@ -595,11 +601,18 @@ export class DataNet {
   /** Decode the exp claim from a JWT without verifying the signature. */
   private parseJwtExp(token: string): number | null {
     try {
-      const payload = JSON.parse(atob(token.split(".")[1])) as { exp?: number };
+      const payload = this.parseJwtPayload(token);
       return typeof payload.exp === "number" ? payload.exp : null;
     } catch {
       return null;
     }
+  }
+
+  /** Decode JWT claims without verifying the signature (the gateway verifies it). */
+  private parseJwtPayload(token: string): Record<string, unknown> {
+    const segment = token.split(".")[1] ?? "";
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(segment.length / 4) * 4, "=");
+    return JSON.parse(atob(base64)) as Record<string, unknown>;
   }
 
   /** True when the stored JWT has expired or will expire within 10 seconds. */
@@ -705,6 +718,70 @@ export class DataNet {
     }
     this.send({ op: "pub", ch: channel, d: data });
     return this;
+  }
+
+  /**
+   * Return authoritative occupancy for a channel.
+   * The client must be connected (and therefore hold a current JWT) first.
+   */
+  async getPresence(channel: string): Promise<PresenceResult> {
+    if (!this.jwt) {
+      throw new DataNetError({
+        code: "not_connected",
+        message: "DataNet: connect before requesting presence",
+      });
+    }
+
+    let projectId: string | undefined;
+    try {
+      const pid = this.parseJwtPayload(this.jwt).pid;
+      if (typeof pid === "string" && pid) projectId = pid;
+    } catch {
+      // Canonical project.<pid>.* channels can still be resolved by the API.
+    }
+
+    const query = `channel=${encodeURIComponent(channel)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    let response: Response;
+    try {
+      response = await fetch(`${this.apiUrl}/presence?${query}`, {
+        headers: { Authorization: `Bearer ${this.jwt}` },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.name === "AbortError"
+        ? "DataNet: presence request timed out"
+        : "DataNet: presence request failed";
+      throw new DataNetError({ code: "presence_failed", message });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      let detail = response.statusText;
+      try {
+        const body = (await response.json()) as { error?: string };
+        detail = body.error ?? detail;
+      } catch {
+        // Fall back to HTTP status text for malformed error bodies.
+      }
+      throw new DataNetError({
+        code: response.status === 403 ? "presence_forbidden" : "presence_failed",
+        status: response.status,
+        channel,
+        message: `DataNet: presence request failed (${response.status}${detail ? ` ${detail}` : ""})`,
+      });
+    }
+
+    const body = (await response.json()) as { occupancy?: unknown; count?: unknown; members?: unknown };
+    const occupancy = typeof body.occupancy === "number"
+      ? body.occupancy
+      : typeof body.count === "number" ? body.count : 0;
+    const members = Array.isArray(body.members)
+      ? body.members.filter((member): member is string => typeof member === "string")
+      : [];
+    return { occupancy, members };
   }
 
   /**

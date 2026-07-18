@@ -90,6 +90,19 @@ Close the connection. No reconnect will be attempted.
 client.disconnect();
 ```
 
+### `await client.getPresence(channel)` → `{ occupancy, members }`
+
+Query the authoritative server-side presence for a subscribed channel. Connect
+the client first so the request can reuse its short-lived JWT.
+
+```ts
+const { occupancy, members } = await client.getPresence("project.abc.demo");
+console.log(`${occupancy} devices connected`, members);
+```
+
+The API key must include the `presence` scope. Presence is intended for
+occasional checks or throttled polling, rather than per-frame requests.
+
 ### `client.connected` → `boolean`
 
 `true` if the WebSocket is currently open.

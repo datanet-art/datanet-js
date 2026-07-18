@@ -76,6 +76,32 @@ describe("DataNet", () => {
     expect(client.connected).toBe(false);
   });
 
+  it("queries authoritative channel presence with the current JWT", async () => {
+    const payload = Buffer.from(JSON.stringify({ pid: "project-id", exp: 4_000_000_000 })).toString("base64url");
+    const token = `header.${payload}.signature`;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ occupancy: 2, members: ["one", "two"] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DataNet({ apiKey: "ak_test", apiUrl: "https://api.example.test" });
+    Object.assign(client as unknown as Record<string, unknown>, { jwt: token });
+
+    await expect(client.getPresence("project.project-id.demo")).resolves.toEqual({
+      occupancy: 2,
+      members: ["one", "two"],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/presence?channel=project.project-id.demo&projectId=project-id",
+      expect.objectContaining({ headers: { Authorization: `Bearer ${token}` } })
+    );
+  });
+
+  it("requires a connection before querying presence", async () => {
+    const client = new DataNet({ apiKey: "ak_test" });
+    await expect(client.getPresence("project.x.demo")).rejects.toMatchObject({ code: "not_connected" });
+  });
+
   it("sends heartbeat envelopes every 30 seconds", () => {
     vi.useFakeTimers();
     vi.stubGlobal("WebSocket", { OPEN: 1 });
