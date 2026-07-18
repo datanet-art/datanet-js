@@ -1,5 +1,12 @@
 # @datanet/p5
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [765dfbe]
+  - @datanet/core@0.1.2
+
 ## 0.2.0
 
 ### Minor Changes
