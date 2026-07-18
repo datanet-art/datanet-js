@@ -1,6 +1,6 @@
 {
   "name": "@datanet/p5",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DataNet addon for p5.js — realtime pub/sub for sketches, in global and instance mode.",
   "license": "MIT",
   "main": "./dist/datanet-p5.js",

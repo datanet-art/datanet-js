@@ -1,5 +1,11 @@
 # @datanet/core
 
+## 0.1.2
+
+### Patch Changes
+
+- 765dfbe: Add `getPresence(channel)` for authoritative channel occupancy and member lookups.
+
 ## 0.1.1
 
 ### Patch Changes
