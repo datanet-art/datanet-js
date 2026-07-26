@@ -70,6 +70,26 @@ describe("DataNet", () => {
     expect(onError).toHaveBeenCalledOnce();
   });
 
+  it("rejects a successful auth response that does not contain a token", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "invalid apiKey" }), {
+      status: 200,
+      statusText: "OK",
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new DataNet({ apiKey: "ak_invalid", apiUrl: "https://api.example.test" });
+    const onError = vi.fn();
+    client.on("error", onError);
+
+    await expect(client.connect()).rejects.toMatchObject({
+      code: "authentication_failed",
+      status: 200,
+    });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(client.connected).toBe(false);
+  });
+
   it("disconnect() is safe to call before connect()", () => {
     const client = new DataNet({ apiKey: "ak_test" });
     expect(() => client.disconnect()).not.toThrow();

@@ -336,7 +336,26 @@ export class DataNet {
       throw err;
     }
 
-    const json = (await res.json()) as { token: string };
+    let json: { token?: unknown; error?: unknown } = {};
+    try {
+      json = (await res.json()) as { token?: unknown; error?: unknown };
+    } catch {
+      // A successful auth exchange must still contain a usable token.
+    }
+
+    if (typeof json.token !== "string" || json.token.trim().length === 0) {
+      const detail = typeof json.error === "string"
+        ? `: ${json.error}`
+        : ": response missing token";
+      const err = new DataNetError({
+        code: "authentication_failed",
+        status: res.status,
+        message: `DataNet: authentication failed (${res.status} ${res.statusText})${detail}`,
+      });
+      this.emit("error", err);
+      throw err;
+    }
+
     this.jwt = json.token;
     this.jwtExpiry = this.parseJwtExp(this.jwt);
     this.scheduleTokenRefresh();
